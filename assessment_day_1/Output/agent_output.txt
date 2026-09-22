@@ -1,0 +1,31 @@
+==================================================
+SYSTEM 3: AI AGENT
+==================================================
+Provider: Groq | Model: openai/gpt-oss-20b
+Architecture: LLM + Tools + Loop
+
+--- Question 1 ---
+Q: What is the fee for AI202?
+step 1: get_course_fee({'course_code': 'AI202'}) -> 18000
+A: The fee for AI202 is **₹18,000**.
+
+--- Question 2 ---
+Q: What is the total fee for CS101 and AI202 after a 10% scholarship?
+step 1: get_course_fee({'course_code': 'CS101'}) -> 12000
+step 2: get_course_fee({'course_code': 'AI202'}) -> 18000
+step 3: calculator({'expression': '(12000 + 18000) * 0.9'}) -> 27000
+A: The total fee for CS101 and AI202 after applying a 10 % scholarship is **₹27,000**.
+
+--- Question 3 ---
+Q: Is DS303 more expensive than CS101, and by how much?
+step 1: get_course_fee({'course_code': 'DS303'}) -> 15000
+step 2: get_course_fee({'course_code': 'CS101'}) -> 12000
+step 3: calculator({'expression': '15000 - 12000'}) -> 3000
+A: Yes—DS303 costs Rs 15,000, while CS101 costs Rs 12,000.  
+**DS303 is Rs 3,000 more expensive than CS101.**
+
+--- Question 4 ---
+Q: Write a two-line welcome message for new AI students.
+A: Welcome to the AI Academy—where curiosity meets innovation!  
+We're thrilled to have you join our community of future thinkers and creators.
+

@@ -1,0 +1,23 @@
+==================================================
+SYSTEM 1: PLAIN CHATBOT
+==================================================
+Provider: Groq | Model: openai/gpt-oss-20b
+Context: No private data provided. No tools enabled.
+
+--- Question 1 ---
+Q: What is the fee for AI202?
+A: 
+
+--- Question 2 ---
+Q: What is the total fee for CS101 and AI202 after a 10% scholarship?
+A: I don’t have the specific fee amounts for CS101 and AI202, so I can’t calculate the
+
+--- Question 3 ---
+Q: Is DS303 more expensive than CS101, and by how much?
+A: I don’t have access to the current pricing for those specific courses, so I can’t tell you whether DS303 is more expensive than CS101 or by how much.
+
+--- Question 4 ---
+Q: Write a two-line welcome message for new AI students.
+A: Welcome to the AI program!  
+Get ready to explore, innovate, and shape the future.
+
