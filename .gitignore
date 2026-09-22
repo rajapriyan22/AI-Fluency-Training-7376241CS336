@@ -1,1 +1,5 @@
 day_2/.env
+
+__pycache__/
+*.pyc
+
