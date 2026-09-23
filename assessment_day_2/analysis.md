@@ -1,0 +1,196 @@
+# Assessment Day 2
+
+# Reasoning and Acting: Comparing Direct Prompting, Chain-of-Thought, and ReAct
+
+## 1. Scenario
+
+The scenario implemented for this assessment is a **Smartphone Shopping Assistant**. In this domain, a student user seeks assistance to make an optimal smartphone purchasing decision based on constraints such as budget limits, minimum RAM, required storage capacity, and emergency money allocation.
+
+### Mock Product Database
+To evaluate reasoning and tool usage, a fictional product database of four smartphones was defined. 
+
+> [!IMPORTANT]
+> **DISCLAIMER**: This product database contains fictional mock data created strictly for demonstration and testing purposes during Assessment Day 2. It does NOT represent live market prices or real-world product availability.
+
+| Phone Name | Price (₹) | RAM (GB) | Storage (GB) | Battery (mAh) | Rating |
+|------------|-----------|----------|--------------|---------------|--------|
+| **Nova X1** | ₹18,000 | 8 | 128 | 5000 | 4.2 |
+| **PixelMax P2** | ₹24,000 | 8 | 256 | 5000 | 4.5 |
+| **Turbo Z3** | ₹28,000 | 12 | 256 | 6000 | 4.4 |
+| **Lite M1** | ₹15,000 | 6 | 128 | 5000 | 4.0 |
+
+### Test Questions
+1. **Simple Reasoning Question (Question 1)**:  
+   *"I have a budget of ₹25,000. If I buy a phone for ₹18,000 and a phone case for ₹800, how much money will remain?"*  
+   - Expected calculation: ₹25,000 - ₹18,000 - ₹800 = ₹6,200. Does not require external tools.
+2. **Multi-Step Reasoning Question (Question 2)**:  
+   *"I have a budget of ₹30,000. I want a phone with at least 8 GB RAM and 256 GB storage. I also want to keep ₹3,000 as emergency money. Which phones in the available product information satisfy these requirements?"*  
+   - Effective phone budget = ₹30,000 - ₹3,000 = ₹27,000.  
+   - PixelMax P2 (₹24,000, 8GB RAM, 256GB storage) -> **Passes**.  
+   - Turbo Z3 (₹28,000, 12GB RAM, 256GB storage) -> **Fails** (exceeds ₹27,000 budget).  
+   - Expected output: PixelMax P2.
+3. **External Information Lookup Question (Question 3)**:  
+   *"Which smartphone has the highest RAM among the available phones?"*  
+   - Requires dynamic tool retrieval via `search_products`. Expected result: Turbo Z3 (12 GB RAM).
+
+---
+
+## 2. Direct Prompting
+
+### Definition & Mechanism
+Direct Prompting is a single-turn interaction pattern where the user query is passed directly to the Large Language Model without intermediate reasoning steps, scratchpads, or external tool integrations. The model generates its response immediately based on its pre-trained weights and any explicit context provided in the prompt.
+
+### Strengths
+- **Low Latency**: Generates responses quickly with minimal token overhead.
+- **Cost-Effective**: Consumes fewer prompt and completion tokens per request.
+- **Sufficient for Simple Queries**: Successfully solves straightforward arithmetic problems (like Question 1) where no external lookup or complex multi-step constraint evaluation is required.
+
+### Limitations
+- **No External Tool Access**: Cannot look up data from external databases, live APIs, or dynamic search indexes.
+- **Inability to Retrieve Unprovided Facts**: When asked Question 3 (*"Which smartphone has the highest RAM?"*) without supplying product specs in the context, Direct Prompting cannot look up the database and fails or asks for clarifying input.
+
+### Observed Results
+- **Question 1**: Answered directly with `₹6,200 remaining` (₹25,000 - ₹18,000 - ₹800).
+- **Question 3 (No context)**: Failed to identify Turbo Z3, noting that no product database was provided.
+
+---
+
+## 3. Chain-of-Thought Prompting
+
+### Definition & Mechanism
+Chain-of-Thought (CoT) Prompting encourages the model to break down complex problems into explicit intermediate logic steps before outputting the final answer. In our implementation, system instructions guide the model to reason step-by-step internally, producing a concise explanation alongside the final conclusion while keeping private reasoning tokens hidden.
+
+### Why Step-by-Step Reasoning Helps
+For multi-step decision problems such as Question 2:
+1. **Budget Subtraction**: It subtracts the ₹3,000 emergency reserve from ₹30,000 to derive the effective phone spending limit of ₹27,000.
+2. **Feature Filtering**: It checks both RAM (>= 8 GB) and Storage (>= 256 GB).
+3. **Candidate Evaluation**: It compares all candidate phones against the ₹27,000 threshold, explicitly identifying that PixelMax P2 qualifies (₹24,000) while Turbo Z3 (₹28,000) fails the budget constraint despite having 12 GB RAM.
+
+### Why CoT Alone Cannot Fetch External Data
+While Chain-of-Thought dramatically improves mathematical and logical precision over context supplied in the prompt, **reasoning alone cannot manufacture missing external information**. When tested on Question 3 without product context, CoT cannot query an external database and remains unable to identify the highest RAM smartphone.
+
+> [!NOTE]
+> All hidden reasoning tokens generated by reasoning models are strictly kept private; only clean explanations and final conclusions are rendered.
+
+---
+
+## 4. ReAct Agent
+
+### Definition & Mechanism
+ReAct (**Reason + Act**) combines reasoning trace generation with task-specific action execution. The agent operates in an iterative loop:
+
+$$\text{User Question} \longrightarrow \text{Thought Summary} \longrightarrow \text{Action (Tool Call)} \longrightarrow \text{Observation (Tool Output)} \longrightarrow \text{Final Answer}$$
+
+### Implementation Details
+The ReAct agent uses Groq's OpenAI-compatible function calling API (`tools=[SEARCH_PRODUCTS_TOOL]`, `tool_choice="auto"`, `parallel_tool_calls=False`). Safe high-level trace events log agent execution without exposing private internal reasoning tokens.
+
+### Trace Log Example (Question 3)
+```text
+[Question] Which smartphone has the highest RAM?
+
+[Thought Summary] External product information is required to answer accurately.
+[Action] search_products({"query": "highest RAM"})
+[Observation] Search match 'highest_ram': Turbo Z3 (12GB RAM, ₹28000)
+
+[Final Answer]
+The smartphone with the highest RAM in our database is the Turbo Z3 – it comes with 12 GB of RAM.
+```
+
+---
+
+## 5. Comparison Table
+
+| Basis for comparison | Direct prompting | Chain-of-Thought | ReAct agent |
+|---|---|---|---|
+| **Reasoning depth** | Shallow (single-turn output without intermediate step decomposition). | Deep (breaks complex queries into logical sub-problems step-by-step). | Dynamic (couples logical step decomposition with external feedback loops). |
+| **Tool usage** | None (cannot trigger external functions or database tools). | None (operates purely on context provided within the prompt). | Full (automatically invokes function tools like `search_products`). |
+| **Reliability on multi-step questions** | Low (prone to calculation skips or constraint oversights on complex queries). | High (when full product context is included in the prompt). | Highest (verifies specs dynamically via tools before outputting answers). |
+| **Transparency (can you see how it got the answer?)** | Low (only final output is returned). | Moderate to High (provides explicit structured step explanations). | Highest (displays safe trace logs of Thought, Action, and Observation). |
+| **Speed / cost** | Fast & Cheap (minimal tokens, single API call). | Moderate (higher token count due to step explanations). | Slower & Higher Cost (requires multi-turn API calls and tool executions). |
+| **Consistency across repeated runs** | High at Temp 0.0, variable at higher temperatures. | High consistency on structured logic at Temp 0.0. | High consistency driven by deterministic tool observations. |
+
+---
+
+## 6. Observed Results
+
+All three paradigms were empirically executed on the Groq API (`openai/gpt-oss-20b` model). The observed output behavior matches expected theoretical outcomes:
+
+1. **Question 1 (Simple Calculation)**:
+   - Direct Prompting: `₹6,200 remaining` (Correct).
+   - Chain-of-Thought: `₹25,000 - ₹18,000 - ₹800 = ₹6,200 remaining` (Correct).
+   - ReAct Agent: Answers directly `You'll have ₹6,200 left` without invoking unnecessary tools (Correct & Efficient).
+
+2. **Question 2 (Multi-Step Filtering)**:
+   - Direct Prompting: Identifies PixelMax P2 if context is given, but lacks detailed explanation.
+   - Chain-of-Thought: Step-by-step breakdown clearly shows ₹30,000 - ₹3,000 = ₹27,000 limit, correctly selecting **PixelMax P2** and rejecting Turbo Z3 for exceeding budget.
+   - ReAct Agent: Triggers `search_products` with budget/RAM/storage filter, receives mock database observation, and confirms **PixelMax P2**.
+
+3. **Question 3 (External Tool Question)**:
+   - Direct Prompting: Fails without context (no tool access).
+   - Chain-of-Thought: Fails without context (cannot query external tools).
+   - ReAct Agent: Automatically issues `search_products({"query": "highest RAM"})`, receives observation `Turbo Z3 (12GB RAM)`, and provides final answer identifying **Turbo Z3**.
+
+---
+
+## 7. Self-Consistency Observation
+
+The multi-step smartphone question (Question 2) was executed through a Self-Consistency experiment across 5 independent runs at `temperature = 0.7` and compared against 5 runs at `temperature = 0.0`.
+
+### Empirical Results Summary
+
+- **Temperature = 0.7**:
+  - Run 1: PixelMax P2 (Extracted Candidate: PixelMax P2)
+  - Run 2: PixelMax P2 (Extracted Candidate: PixelMax P2)
+  - Run 3: PixelMax P2 (Extracted Candidate: PixelMax P2)
+  - Run 4: PixelMax P2 (Extracted Candidate: PixelMax P2)
+  - Run 5: PixelMax P2 (Extracted Candidate: PixelMax P2)
+  - **Majority Answer**: PixelMax P2 (5/5 votes, 100% agreement on candidate, with minor variations in markdown table formatting and phrasing).
+
+- **Temperature = 0.0**:
+  - Run 1 to Run 5: PixelMax P2 (5/5 votes, 100% deterministic, producing verbatim identical text outputs across all 5 runs).
+
+### Analysis of Temperature Effects
+- At `temperature = 0.7`, higher sampling randomness produces stylistic variation in how the reasoning steps and tables are structured, but self-consistency majority voting successfully isolates the correct candidate (**PixelMax P2**).
+- At `temperature = 0.0`, greedy decoding eliminates sampling variance, resulting in completely deterministic output across runs.
+
+---
+
+## 8. Suitability Analysis
+
+Based on the empirical evidence gathered during testing:
+
+1. **Direct Prompting** is suitable **ONLY** for simple, single-step queries where all required facts are already present in the prompt (such as Question 1). It is unsuitable for dynamic smartphone shopping recommendations where database lookups are needed.
+2. **Chain-of-Thought Prompting** is suitable for complex constraint evaluation (such as Question 2) **WHEN** product catalog data is small enough to fit within the prompt context window and does not change dynamically.
+3. **ReAct Agent** is the **MOST SUITABLE** architecture for a real-world Smartphone Shopping Assistant. In practical applications:
+   - Smartphone inventories, prices, and stock levels change constantly.
+   - Catalog sizes exceed prompt context limits.
+   - ReAct allows the model to selectively query tools (`search_products`) only when external data is needed, keeping context clean and accuracy high.
+
+---
+
+## 9. Limitations
+
+### Direct Prompting
+- Zero external tool integration capabilities.
+- Complete reliance on static pre-training data or manually pasted prompt context.
+- Higher risk of arithmetic or logic oversights on multi-step constraints.
+
+### Chain-of-Thought
+- Cannot retrieve missing information outside the prompt context.
+- Consumes additional completion tokens for intermediate step explanations.
+- Raw hidden chain-of-thought tokens must be filtered to prevent exposing system internal reasoning.
+
+### ReAct Agent
+- Dependency on external tool stability and correct tool schema formatting.
+- Higher latency and cost due to multi-turn round-trips to the LLM and tool execution.
+- Malformed tool parameters or tool failures can cause loop iterations or agent confusion if not guarded by maximum iteration bounds.
+
+---
+
+## 10. General Conclusion
+
+Different prompting and agentic paradigms are tailored to distinct problem domains:
+
+- **Direct Prompting** should be used for simple, low-complexity tasks, text transformation, summarization, and direct Q&A where all required information is static and contained in the prompt.
+- **Chain-of-Thought Prompting** should be used for logic-heavy, multi-step math or reasoning problems where all input data is provided, but intermediate step decomposition is required to ensure correctness.
+- **ReAct Agents** should be used for real-world autonomous assistants requiring interaction with external databases, APIs, web search tools, dynamic inventories, or multi-action workflows.
